@@ -7,7 +7,7 @@ tools/detail.py
 """
 
 from __future__ import annotations
-from api.public_data import fetch_protected_trees, normalize_tree
+from api.public_data import fetch_all_protected_trees, normalize_tree
 
 
 async def get_protected_tree_detail(tree_id: str) -> dict:
@@ -18,8 +18,7 @@ async def get_protected_tree_detail(tree_id: str) -> dict:
         tree_id: 보호수 지정번호 (예: 11-1-7, 서울-강남-1 등)
     """
     try:
-        # 전체 목록에서 지정번호로 필터링
-        result = await fetch_protected_trees(num_of_rows=100)
+        result = await fetch_all_protected_trees()
     except Exception as e:
         return {"error": f"공공 API 호출 실패: {str(e)}", "tree_id": tree_id}
 
@@ -51,10 +50,7 @@ async def get_protected_tree_stats(
         group_by = "species"
 
     try:
-        result = await fetch_protected_trees(
-            sigungu=region,
-            num_of_rows=100,
-        )
+        result = await fetch_all_protected_trees(sigungu=region)
     except Exception as e:
         return {"error": f"공공 API 호출 실패: {str(e)}"}
 

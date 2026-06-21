@@ -7,8 +7,43 @@ tools/search.py
 """
 
 from __future__ import annotations
-from api.public_data import fetch_protected_trees, normalize_tree
+import asyncio
+from api.public_data import fetch_all_protected_trees, normalize_tree
+from api.heritage import fetch_heritage_trees, normalize_heritage_tree
 from api.kakao_map import haversine_km
+
+# 시도 약칭 → 공식명 매핑
+_SIDO_ALIAS: dict[str, str] = {
+    "서울": "서울특별시",
+    "부산": "부산광역시",
+    "대구": "대구광역시",
+    "인천": "인천광역시",
+    "광주": "광주광역시",
+    "대전": "대전광역시",
+    "울산": "울산광역시",
+    "세종": "세종특별자치시",
+    "경기": "경기도",
+    "강원": "강원특별자치도",
+    "충북": "충청북도",
+    "충남": "충청남도",
+    "전북": "전북특별자치도",
+    "전남": "전라남도",
+    "경북": "경상북도",
+    "경남": "경상남도",
+    "제주": "제주특별자치도",
+}
+
+_SIDO_NAMES = set(_SIDO_ALIAS.values())
+
+
+def _classify_location(loc: str) -> tuple[str, str]:
+    """(sigungu, sido) 분류 — 시도명이면 sido에, 그 외는 sigungu에 배치"""
+    if not loc:
+        return "", ""
+    expanded = _SIDO_ALIAS.get(loc, loc)
+    if expanded in _SIDO_NAMES:
+        return "", expanded
+    return loc, ""
 
 
 async def search_protected_trees(
@@ -26,42 +61,63 @@ async def search_protected_trees(
         min_age:     최소 수령 필터 (년). 0이면 전체
         max_results: 반환할 최대 건수 (기본 20, 최대 100)
     """
-    max_results = min(max_results, 100)
+    max_results = min(max_results, 500)
     loc = location.strip()
 
-    # 1차: 시군구명(SGG_NM) API 필터로 조회
-    try:
-        result = await fetch_protected_trees(sigungu=loc, num_of_rows=100)
-    except Exception as e:
-        return {"error": f"공공 API 호출 실패: {str(e)}", "trees": []}
+    sigungu_q, sido_q = _classify_location(loc)
 
-    trees = [normalize_tree(raw) for raw in result.get("items", [])]
-
-    # 2차: 결과 없으면 시도명(CTPV_NM) 클라이언트 필터로 재조회
-    if not trees and loc:
+    # 보호수 + 천연기념물 병렬 조회
+    async def _fetch_protected() -> list[dict]:
         try:
-            result2 = await fetch_protected_trees(num_of_rows=100)
-            trees = [
-                normalize_tree(raw) for raw in result2.get("items", [])
-                if loc in normalize_tree(raw).get("sido", "")
-            ]
+            result = await fetch_all_protected_trees(sigungu=sigungu_q, sido=sido_q)
+            trees = [normalize_tree(raw) for raw in result.get("items", [])]
+            for t in trees:
+                t.setdefault("source", "보호수")
+            return trees
         except Exception:
-            pass
+            return []
+
+    heritage_error: str = ""
+
+    async def _fetch_heritage() -> list[dict]:
+        nonlocal heritage_error
+        try:
+            # 시도 필터 없이 전체 조회 후 클라이언트 필터
+            result = await fetch_heritage_trees(num_of_rows=600)
+            trees = [normalize_heritage_tree(raw) for raw in result.get("items", [])]
+            if loc:
+                trees = [
+                    t for t in trees
+                    if loc in t.get("sido", "") or loc in t.get("sigungu", "") or loc in t.get("address", "")
+                ]
+            return trees
+        except Exception as e:
+            heritage_error = str(e)
+            return []
+
+    protected_trees, heritage_trees = await asyncio.gather(
+        _fetch_protected(), _fetch_heritage()
+    )
+    # 천연기념물을 먼저 표시 (더 중요도 높음)
+    all_trees = heritage_trees + protected_trees
 
     # 수종 필터 (클라이언트)
     if species:
-        trees = [t for t in trees if species in t.get("species", "")]
+        all_trees = [t for t in all_trees if species in t.get("species", "")]
 
-    # 수령 필터 (클라이언트)
+    # 수령 필터 (클라이언트, 천연기념물은 age=0이므로 보호수만 필터링됨)
     if min_age > 0:
-        trees = [t for t in trees if t["age"] >= min_age]
+        all_trees = [t for t in all_trees if t["age"] >= min_age]
 
-    return {
+    result = {
         "query": {"location": location, "species": species, "min_age": min_age},
-        "total_count": result.get("totalCount", 0),
-        "returned": len(trees[:max_results]),
-        "trees": trees[:max_results],
+        "total_count": len(all_trees),
+        "returned": len(all_trees[:max_results]),
+        "trees": all_trees[:max_results],
     }
+    if heritage_error:
+        result["heritage_error"] = heritage_error
+    return result
 
 
 async def find_nearby_protected_trees(
@@ -85,10 +141,7 @@ async def find_nearby_protected_trees(
     max_results = min(max_results, 50)
 
     try:
-        result = await fetch_protected_trees(
-            sigungu=sigungu,
-            num_of_rows=100,
-        )
+        result = await fetch_all_protected_trees(sigungu=sigungu)
     except Exception as e:
         return {"error": f"공공 API 호출 실패: {str(e)}", "trees": []}
 

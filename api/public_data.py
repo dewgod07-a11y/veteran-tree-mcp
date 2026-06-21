@@ -30,6 +30,7 @@ def _cache_set(key: str, data: Any) -> None:
 
 async def fetch_protected_trees(
     sigungu: str = "",
+    sido: str = "",
     page_no: int = 1,
     num_of_rows: int = 100,
 ) -> dict:
@@ -39,7 +40,7 @@ async def fetch_protected_trees(
     Returns:
         { "totalCount": int, "items": [ {...}, ... ] }
     """
-    cache_key = f"list:{sigungu}:{page_no}:{num_of_rows}"
+    cache_key = f"list:{sigungu}:{sido}:{page_no}:{num_of_rows}"
     cached = _cache_get(cache_key)
     if cached:
         return cached
@@ -53,8 +54,10 @@ async def fetch_protected_trees(
     })
     if sigungu:
         qs += f"&cond[SGG_NM::LIKE]={urllib.parse.quote(sigungu)}"
+    if sido:
+        qs += f"&cond[CTPV_NM::LIKE]={urllib.parse.quote(sido)}"
 
-    async with httpx.AsyncClient(timeout=15.0) as client:
+    async with httpx.AsyncClient(timeout=20.0) as client:
         resp = await client.get(f"{ENDPOINT}?{qs}")
         resp.raise_for_status()
         data = resp.json()
@@ -73,6 +76,45 @@ async def fetch_protected_trees(
         items = []
 
     result = {"totalCount": total, "items": items}
+    _cache_set(cache_key, result)
+    return result
+
+
+async def fetch_all_protected_trees(
+    sigungu: str = "",
+    sido: str = "",
+    max_items: int = 3000,
+) -> dict:
+    """
+    보호수 전체 목록 페이지네이션 조회 (최대 max_items건)
+
+    Returns:
+        { "totalCount": int, "items": [ {...}, ... ] }
+    """
+    cache_key = f"all:{sigungu}:{sido}:{max_items}"
+    cached = _cache_get(cache_key)
+    if cached:
+        return cached
+
+    PAGE_SIZE = 1000
+    first = await fetch_protected_trees(
+        sigungu=sigungu, sido=sido, page_no=1, num_of_rows=PAGE_SIZE
+    )
+    total = first["totalCount"]
+    items: list = list(first["items"])
+
+    page = 2
+    while len(items) < min(total, max_items):
+        more = await fetch_protected_trees(
+            sigungu=sigungu, sido=sido, page_no=page, num_of_rows=PAGE_SIZE
+        )
+        batch = more["items"]
+        if not batch:
+            break
+        items.extend(batch)
+        page += 1
+
+    result = {"totalCount": total, "items": items[:max_items]}
     _cache_set(cache_key, result)
     return result
 
