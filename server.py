@@ -38,5 +38,10 @@ mcp.tool()(get_protected_tree_stats)
 
 if __name__ == "__main__":
     import os
+    # Railway/Render 등이 주입하는 PORT를 FastMCP 설정으로 전달
+    if "PORT" in os.environ:
+        os.environ.setdefault("FASTMCP_PORT", os.environ["PORT"])
+    os.environ.setdefault("FASTMCP_HOST", "0.0.0.0")
+
     transport = os.getenv("MCP_TRANSPORT", "stdio")
     mcp.run(transport=transport)

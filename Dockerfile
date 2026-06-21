@@ -8,7 +8,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 ENV MCP_TRANSPORT=sse
-ENV PORT=8000
+ENV FASTMCP_HOST=0.0.0.0
+ENV FASTMCP_PORT=8000
 
 EXPOSE 8000
 
