@@ -6,8 +6,6 @@
 from mcp.server.fastmcp import FastMCP
 from mcp.server.transport_security import TransportSecuritySettings
 from mcp.types import ToolAnnotations
-from starlette.responses import FileResponse
-from starlette.routing import Route
 from tools.search import (
     search_protected_trees,
     find_nearby_protected_trees,
@@ -92,12 +90,6 @@ mcp.tool(
         idempotentHint=True,
     ),
 )(get_protected_tree_stats)
-
-
-async def _icon(request):
-    return FileResponse("icon/apple-icon-180.png", media_type="image/png")
-
-mcp._custom_starlette_routes.append(Route("/icon.png", endpoint=_icon))
 
 
 if __name__ == "__main__":
