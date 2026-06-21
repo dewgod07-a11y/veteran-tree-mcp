@@ -4,6 +4,7 @@
 """
 
 from mcp.server.fastmcp import FastMCP
+from mcp.server.transport_security import TransportSecuritySettings
 from mcp.types import ToolAnnotations
 from tools.search import (
     search_protected_trees,
@@ -21,6 +22,8 @@ mcp = FastMCP(
         "지역명·수종으로 보호수를 검색하고, 지정번호로 상세 정보를 조회하며, "
         "현재 위치 주변의 보호수를 거리순으로 찾아드립니다."
     ),
+    # KC 리버스 프록시 통과 시 Host 헤더가 localhost가 아니므로 DNS rebinding 보호 비활성화
+    transport_security=TransportSecuritySettings(enable_dns_rebinding_protection=False),
 )
 
 mcp.tool(
