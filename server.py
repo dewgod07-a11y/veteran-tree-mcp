@@ -1,13 +1,10 @@
 """
 보호수 MCP 서버
 카카오 PlayMCP 등록용 — 공공데이터 기반 전국 보호수 조회 도구 모음
-
-실행 방법:
-  pip install -r requirements.txt
-  python server.py
 """
 
 from mcp.server.fastmcp import FastMCP
+from mcp.types import ToolAnnotations
 from tools.search import (
     search_protected_trees,
     find_nearby_protected_trees,
@@ -26,19 +23,74 @@ mcp = FastMCP(
     ),
 )
 
-# 🔍 검색 (2개)
-mcp.tool()(search_protected_trees)
-mcp.tool()(find_nearby_protected_trees)
+mcp.tool(
+    title="Search Protected Trees",
+    description=(
+        "Search for protected trees (보호수) and natural monument trees (천연기념물) "
+        "in the 보호수 MCP database by location name or species. "
+        "Supports abbreviations like '전남', '경북'. "
+        "Returns a merged list of 보호수 (산림청) and 천연기념물 수목 (국가유산청) results."
+    ),
+    annotations=ToolAnnotations(
+        title="Search Protected Trees",
+        readOnlyHint=True,
+        destructiveHint=False,
+        openWorldHint=True,
+        idempotentHint=True,
+    ),
+)(search_protected_trees)
 
-# 📋 상세 조회 · 통계 (2개)
-mcp.tool()(get_protected_tree_detail)
-mcp.tool()(get_protected_tree_stats)
+mcp.tool(
+    title="Find Nearby Protected Trees",
+    description=(
+        "Find protected trees (보호수) near a given GPS coordinate in the 보호수 MCP database. "
+        "Returns trees sorted by distance within the specified radius. "
+        "Input latitude/longitude in decimal degrees (WGS84)."
+    ),
+    annotations=ToolAnnotations(
+        title="Find Nearby Protected Trees",
+        readOnlyHint=True,
+        destructiveHint=False,
+        openWorldHint=True,
+        idempotentHint=True,
+    ),
+)(find_nearby_protected_trees)
 
+mcp.tool(
+    title="Get Protected Tree Detail",
+    description=(
+        "Retrieve detailed information for a single protected tree (보호수) "
+        "by its designation number (지정번호) from the 보호수 MCP database. "
+        "Includes species, age, address, and a Kakao Map link."
+    ),
+    annotations=ToolAnnotations(
+        title="Get Protected Tree Detail",
+        readOnlyHint=True,
+        destructiveHint=False,
+        openWorldHint=True,
+        idempotentHint=True,
+    ),
+)(get_protected_tree_detail)
+
+mcp.tool(
+    title="Get Protected Tree Stats",
+    description=(
+        "Get aggregated statistics for protected trees (보호수) in the 보호수 MCP database. "
+        "Supports grouping by species (수종별), region (시도별), or age range (수령대별). "
+        "Optionally filter by a specific district (시군구)."
+    ),
+    annotations=ToolAnnotations(
+        title="Get Protected Tree Stats",
+        readOnlyHint=True,
+        destructiveHint=False,
+        openWorldHint=True,
+        idempotentHint=True,
+    ),
+)(get_protected_tree_stats)
 
 
 if __name__ == "__main__":
     import os
-    # Railway/Render 등이 주입하는 PORT를 FastMCP 설정으로 전달
     if "PORT" in os.environ:
         os.environ.setdefault("FASTMCP_PORT", os.environ["PORT"])
     os.environ.setdefault("FASTMCP_HOST", "0.0.0.0")
